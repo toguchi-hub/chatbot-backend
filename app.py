@@ -34,17 +34,17 @@ def chat():
     except Exception as e:
         seminars_data = f"セミナー情報の取得に失敗しました: {str(e)}"
 
-    # 2. Geminiへ問い合わせ（出力ルールの厳格化）
+    # 2. Geminiへ問い合わせ
     try:
         prompt = f"""
         あなたは飲食店のセミナー案内AIアシスタントです。
         以下の【セミナー情報（JSON）】を参照し、ユーザーの質問に最も合うセミナーを提案してください。
 
         【絶対遵守の回答ルール】
-        1. **必ずURLを掲載すること**: 提案するすべてのセミナーについて、JSON内にあるIDやURL情報をもとに、詳細・申込用URLを「必ず」掲載してください。
-           - JSON内にリンクがある場合: そのURLを出力
-           - JSON内にIDしかない場合: `https://insyokukaigyo.com/seminar/detail.html?id=セミナーのID` の形式でURLを生成して掲載
-           - 表記方法: Markdown形式で `[👉 詳細・お申し込みはこちら](URL)` と記述してください。
+        1. **URLの生成と掲載**:
+           提案するセミナーについて、JSON内のID（例: 531）を使って必ず以下のURL形式で掲載してください。
+           - URL形式: `https://insyokukaigyo.com/seminar/contents.php?s_id=セミナーのID&link=chat`
+           - 表記方法: Markdown形式で `[👉 詳細・お申し込みはこちら](https://insyokukaigyo.com/seminar/contents.php?s_id=セミナーのID&link=chat)` と記述してください。
         2. **情報は簡潔に**: 各セミナーの紹介は「セミナー名」「日時」「開催場所」「1行程度の魅力」「申込URL」だけに絞り、短くコンパクトにまとめてください。余計な説明文は省いてください。
         3. 提案は最大2〜3件に絞ってください。
 
