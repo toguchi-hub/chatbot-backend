@@ -16,9 +16,9 @@ SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
 GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 
 def log_to_sheets(user_msg, ai_reply):
-    """スプレッドシートにログを追記する関数（エラー時は例外を投げる）"""
+    """スプレッドシートにログを追記する関数"""
     if not SPREADSHEET_ID or not GOOGLE_CREDENTIALS_JSON:
-        raise Exception("環境変数 SPREADSHEET_ID または GOOGLE_CREDENTIALS_JSON が未設定です")
+        return
 
     creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
     gc = gspread.service_account_from_dict(creds_dict)
@@ -42,15 +42,18 @@ def chat():
     user_message = data.get("message", "")
 
     if not user_message:
-        return jsonify({"error": "No message provided"}), 400
+        return jsonify({"error": "メッセージが入力されていません。"}), 400
 
+    # 1. セミナー情報の取得
     try:
         response = requests.get(SEMINAR_JSON_URL, timeout=5)
         response.raise_for_status()
         seminars_data = response.json()
     except Exception as e:
-        seminars_data = f"セミナー情報の取得に失敗しました: {str(e)}"
+        print(f"セミナーJSON取得エラー: {e}")
+        seminars_data = "現在セミナー情報の自動取得に失敗しています。"
 
+    # 2. Geminiへ問い合わせ
     try:
         prompt = f"""
         あなたは飲食店のセミナー案内AIアシスタントです。
@@ -78,7 +81,7 @@ def chat():
 
         reply_text = response.text
 
-        # スプレッドシートへ書き込み（失敗した場合はエラーログを出力）
+        # スプレッドシートへ保存（失敗してもユーザーには影響させない）
         try:
             log_to_sheets(user_message, reply_text)
         except Exception as sheet_err:
@@ -87,7 +90,17 @@ def chat():
         return jsonify({"reply": reply_text})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        error_str = str(e)
+        print(f"Gemini APIエラー詳細: {error_str}")
+
+        # 連投制限（429 RESOURCE_EXHAUSTED）の場合
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+            user_error_msg = "ただいまアクセスが集中し混み合っております。お手数ですが、30秒ほど時間をおいて再度お試しください。"
+        else:
+            # その他のシステムエラーの場合
+            user_error_msg = "申し訳ありません。一時的に回答を生成できませんでした。しばらく時間をおいてから再度お試しいただくか、別の表現でお尋ねください。"
+
+        return jsonify({"error": user_error_msg}), 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
