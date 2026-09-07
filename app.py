@@ -1,17 +1,35 @@
 import os
 import json
 import requests
+from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from google import genai
+import gspread
 
 app = Flask(__name__)
-CORS(app)  # WebサイトからのAPIアクセス（CORS）を許可
+CORS(app)
 
-# 環境変数からGEMINI_API_KEYを取得
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# 実際のセミナーJSONファイルのURL
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
+GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+
+def log_to_sheets(user_msg, ai_reply):
+    """スプレッドシートにログを追記する関数（エラー時は例外を投げる）"""
+    if not SPREADSHEET_ID or not GOOGLE_CREDENTIALS_JSON:
+        raise Exception("環境変数 SPREADSHEET_ID または GOOGLE_CREDENTIALS_JSON が未設定です")
+
+    creds_dict = json.loads(GOOGLE_CREDENTIALS_JSON)
+    gc = gspread.service_account_from_dict(creds_dict)
+    
+    sheet = gc.open_by_key(SPREADSHEET_ID).sheet1
+    
+    jst = timezone(timedelta(hours=9))
+    now_str = datetime.now(jst).strftime("%Y-%m-%d %H:%M:%S")
+    
+    sheet.append_row([now_str, user_msg, ai_reply])
+
 SEMINAR_JSON_URL = "https://insyokukaigyo.com/js/seminar.json"
 
 @app.route("/", methods=["GET"])
@@ -26,7 +44,6 @@ def chat():
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
 
-    # 1. サイトからセミナー情報を取得
     try:
         response = requests.get(SEMINAR_JSON_URL, timeout=5)
         response.raise_for_status()
@@ -34,7 +51,6 @@ def chat():
     except Exception as e:
         seminars_data = f"セミナー情報の取得に失敗しました: {str(e)}"
 
-    # 2. Geminiへ問い合わせ
     try:
         prompt = f"""
         あなたは飲食店のセミナー案内AIアシスタントです。
@@ -45,7 +61,7 @@ def chat():
            提案するセミナーについて、JSON内のID（例: 531）を使って必ず以下のURL形式で掲載してください。
            - URL形式: `https://insyokukaigyo.com/seminar/contents.php?s_id=セミナーのID&link=chat`
            - 表記方法: Markdown形式で `[👉 詳細・お申し込みはこちら](https://insyokukaigyo.com/seminar/contents.php?s_id=セミナーのID&link=chat)` と記述してください。
-        2. **情報は簡潔に**: 各セミナーの紹介は「セミナー名」「日時」「開催場所」「1行程度の魅力」「申込URL」だけに絞り、短くコンパクトにまとめてください。余計な説明文は省いてください。
+        2. **情報は簡潔に**: 各セミナーの紹介は「セミナー名」「日時」「開催場所」「1行程度の魅力」「申込URL」だけに絞り、短くコンパクトにまとめてください。
         3. 提案は最大2〜3件に絞ってください。
 
         【セミナー情報】
@@ -60,7 +76,15 @@ def chat():
             contents=prompt,
         )
 
-        return jsonify({"reply": response.text})
+        reply_text = response.text
+
+        # スプレッドシートへ書き込み（失敗した場合はエラーログを出力）
+        try:
+            log_to_sheets(user_message, reply_text)
+        except Exception as sheet_err:
+            print(f"スプレッドシート保存失敗: {sheet_err}")
+
+        return jsonify({"reply": reply_text})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
