@@ -34,7 +34,7 @@ def chat():
     except Exception as e:
         seminars_data = f"セミナー情報の取得に失敗しました: {str(e)}"
 
-    # 2. Geminiへ問い合わせ（厳格な出力ルールを適用）
+    # 2. Geminiへ問い合わせ（出力ルールの厳格化）
     try:
         prompt = f"""
         あなたは飲食店のセミナー案内AIアシスタントです。
