@@ -11,7 +11,7 @@ CORS(app)  # WebサイトからのAPIアクセス（CORS）を許可
 # 環境変数からGEMINI_API_KEYを取得
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# セミナーJSONファイルのURL
+# 実際のセミナーJSONファイルのURL
 SEMINAR_JSON_URL = "https://insyokukaigyo.com/js/seminar.json"
 
 @app.route("/", methods=["GET"])
@@ -48,7 +48,7 @@ def chat():
         """
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=prompt,
         )
 
