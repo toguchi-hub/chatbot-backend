@@ -9,9 +9,9 @@ app = Flask(__name__)
 CORS(app)  # WebサイトからのAPIアクセス（CORS）を許可
 
 # 環境変数からGEMINI_API_KEYを取得
-client = genai.Client(api_key=os.environ.g("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# セミナーJSONファイルのURL
+# 実際のセミナーJSONファイルのURL
 SEMINAR_JSON_URL = "https://insyokukaigyo.com/js/seminar.json"
 
 @app.route("/", methods=["GET"])
@@ -34,17 +34,19 @@ def chat():
     except Exception as e:
         seminars_data = f"セミナー情報の取得に失敗しました: {str(e)}"
 
-    # 2. Geminiへ問い合わせ（プロンプトを調整）
+    # 2. Geminiへ問い合わせ（厳格な出力ルールを適用）
     try:
         prompt = f"""
         あなたは飲食店のセミナー案内AIアシスタントです。
-        以下のセミナー情報（JSON形式）を参照し、ユーザーの質問に最も合うセミナーを提案してください。
+        以下の【セミナー情報（JSON）】を参照し、ユーザーの質問に最も合うセミナーを提案してください。
 
-        【回答ルール】
-        1. 長くなりすぎないよう、要点（セミナー名、日時、形式、簡単な魅力）だけに絞ってコンパクトに回答してください。
-        2. 提案する各セミナーには、JSON内にある詳細・申込ページのURL（`url` または `link` などの項目）を必ず含めてください。
-        3. URLは Markdown 形式（例: [詳細・お申し込みはこちら](https://...) ）で出力してください。
-        4. 該当するセミナーがない場合は、無理に提案せず別の相談窓口等を案内してください。
+        【絶対遵守の回答ルール】
+        1. **必ずURLを掲載すること**: 提案するすべてのセミナーについて、JSON内にあるIDやURL情報をもとに、詳細・申込用URLを「必ず」掲載してください。
+           - JSON内にリンクがある場合: そのURLを出力
+           - JSON内にIDしかない場合: `https://insyokukaigyo.com/seminar/detail.html?id=セミナーのID` の形式でURLを生成して掲載
+           - 表記方法: Markdown形式で `[👉 詳細・お申し込みはこちら](URL)` と記述してください。
+        2. **情報は簡潔に**: 各セミナーの紹介は「セミナー名」「日時」「開催場所」「1行程度の魅力」「申込URL」だけに絞り、短くコンパクトにまとめてください。余計な説明文は省いてください。
+        3. 提案は最大2〜3件に絞ってください。
 
         【セミナー情報】
         {json.dumps(seminars_data, ensure_ascii=False)}
